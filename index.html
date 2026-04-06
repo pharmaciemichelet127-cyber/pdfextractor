@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF → Excel Extracteur</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap');
+  :root {
+    --bg:#f4f6fa;--surface:#fff;--surface2:#f0f2f7;--border:#dde1ee;
+    --accent:#2563eb;--accent-h:#1d4ed8;--accent-l:#eff4ff;
+    --ok:#16a34a;--ok-l:#f0fdf4;--err:#dc2626;--err-l:#fef2f2;
+    --warn:#d97706;--warn-l:#fffbeb;--text:#111827;--muted:#6b7280;--muted2:#9ca3af;
+    --shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:40px 20px 80px}
+  .container{max-width:860px;margin:0 auto}
+  header{margin-bottom:32px}
+  .logo-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+  h1{font-size:22px;font-weight:800;letter-spacing:-.3px}
+  .subtitle{color:var(--muted);font-size:14px;margin-left:46px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .card-title{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+  .api-key-link{font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;letter-spacing:0;text-transform:none}
+  .api-key-link:hover{text-decoration:underline}
+  .api-input-wrap{display:flex;gap:8px}
+  .api-input{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+  .api-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1);background:#fff}
+  .api-input::placeholder{color:var(--muted2);font-family:'Inter',sans-serif}
+  .btn-icon{background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:14px;transition:all .15s;color:var(--muted);flex-shrink:0}
+  .btn-icon:hover{border-color:var(--accent);color:var(--accent)}
+  .api-status{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;font-weight:500}
+  .api-status.ok{color:var(--ok)}.api-status.missing{color:var(--muted)}
+  .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:48px 32px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2)}
+  .drop-zone:hover,.drop-zone.active{border-color:var(--accent);background:var(--accent-l)}
+  .drop-icon{font-size:40px;margin-bottom:12px;display:block}
+  .drop-text{font-size:16px;font-weight:700;margin-bottom:4px}
+  .drop-sub{font-size:13px;color:var(--muted)}
+  #fileInput{display:none}
+  .file-chip{display:none;align-items:center;gap:10px;padding:10px 14px;background:var(--accent-l);border:1.5px solid rgba(37,99,235,.2);border-radius:8px;margin-top:10px}
+  .fname{font-size:13px;font-weight:600;color:var(--accent)}
+  .fsize{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+  .btn-remove{margin-left:auto;cursor:pointer;color:var(--muted2);font-size:16px;background:none;border:none;transition:color .15s}
+  .btn-remove:hover{color:var(--err)}
+  .columns-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px}
+  .col-toggle{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;user-select:none}
+  .col-toggle:hover{border-color:var(--accent)}
+  .col-toggle.checked{border-color:var(--accent);background:var(--accent-l)}
+  .col-toggle input{display:none}
+  .check-box{width:16px;height:16px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:10px;color:transparent}
+  .col-toggle.checked .check-box{background:var(--accent);border-color:var(--accent);color:#fff}
+  .col-label{font-size:13px;font-weight:600}.col-desc{font-size:11px;color:var(--muted)}
+  .btn-extract{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 8px rgba(37,99,235,.25)}
+  .btn-extract:hover{background:var(--accent-h);transform:translateY(-1px)}
+  .btn-extract:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+  .progress-wrap{margin:16px 0;display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px}
+  .progress-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .progress-label{font-size:13px;font-weight:600}
+  .progress-pct{font-size:13px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace}
+  .progress-bar-bg{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px}
+  .progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .4s ease}
+  .progress-detail{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace}
+  .pages-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .page-chip{font-size:11px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);transition:all .2s}
+  .page-chip.processing{border-color:var(--accent);background:var(--accent-l);color:var(--accent);animation:pulse 1s infinite}
+  .page-chip.done{border-color:var(--ok);background:var(--ok-l);color:var(--ok)}
+  .page-chip.skip{opacity:.35}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .alert{padding:12px 16px;border-radius:8px;font-size:13px;margin:12px 0;font-weight:500;display:none}
+  .alert.error{background:var(--err-l);border:1px solid rgba(220,38,38,.2);color:var(--err)}
+  .alert.success{background:var(--ok-l);border:1px solid rgba(22,163,74,.2);color:var(--ok)}
+  .alert.warning{background:var(--warn-l);border:1px solid rgba(217,119,6,.2);color:var(--warn)}
+  .stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;text-align:center}
+  .stat-num{font-size:22px;font-weight:800;font-family:'DM Mono',monospace}
+  .stat-num.green{color:var(--ok)}.stat-num.orange{color:var(--warn)}
+  .stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+  .results-panel{margin-top:24px;display:none}
+  .results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+  .results-title{font-size:17px;font-weight:700}
+  .results-meta{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+  .btn-download{padding:9px 18px;background:var(--ok);color:#fff;border:none;border-radius:8px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(22,163,74,.2);transition:background .15s}
+  .btn-download:hover{background:#15803d}
+  .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface)}
+  thead tr{background:var(--surface2);border-bottom:2px solid var(--border)}
+  th{padding:11px 14px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+  tbody tr:hover{background:#f8f9fc}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr.incomplete{background:#fffbeb}
+  tbody tr.incomplete:hover{background:#fef3c7}
+  td{padding:9px 14px;vertical-align:middle}
+  .ean-cell{font-family:'DM Mono',monospace;color:#1d4ed8;font-size:12px;white-space:nowrap}
+  .cip-cell{font-family:'DM Mono',monospace;color:#7c3aed;font-size:12px;white-space:nowrap}
+  .label-cell{color:var(--text);font-weight:500;max-width:300px}
+  .qty-cell{font-family:'DM Mono',monospace;color:var(--warn);text-align:center;font-size:12px}
+  .price-cell{font-family:'DM Mono',monospace;color:var(--ok);text-align:right;font-size:12px;font-weight:500}
+  .tva-cell{font-family:'DM Mono',monospace;color:var(--muted);text-align:center;font-size:12px}
+  .null-cell{color:var(--muted2)}
+  .empty-state{text-align:center;padding:40px;color:var(--muted);font-size:13px}
+  .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  .filter-btn{padding:6px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted)}
+  .filter-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-l)}
+  .cip-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo-row">
+      <div class="logo-icon">📊</div>
+      <h1>PDF → Excel · Extracteur Tarifs</h1>
+    </div>
+    <div class="subtitle">Extraction page par page · Prix complets · Doublons intelligents</div>
+  </header>
+
+  <div class="card">
+    <div class="card-title">Clé API Anthropic <a class="api-key-link" href="https://console.anthropic.com/settings/keys" target="_blank">↗ Obtenir une clé</a></div>
+    <div class="api-input-wrap">
+      <input class="api-input" type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="updateApiStatus()" autocomplete="off" spellcheck="false">
+      <button class="btn-icon" onclick="toggleApiVisibility()">👁</button>
+    </div>
+    <div id="apiStatus" class="api-status missing"><div class="dot"></div> Clé non renseignée</div>
+  </div>
+
+  <div class="card" style="padding:16px">
+    <div class="card-title" style="margin-bottom:10px">Fichier PDF</div>
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <span class="drop-icon">📄</span>
+      <div class="drop-text">Déposez votre PDF ici</div>
+      <div class="drop-sub">ou cliquez pour parcourir · toutes tailles supportées</div>
+      <input type="file" id="fileInput" accept=".pdf">
+    </div>
+    <div class="file-chip" id="fileInfo">
+      <span>📄</span>
+      <div><div class="fname" id="fileName"></div><div class="fsize" id="fileSize"></div></div>
+      <button class="btn-remove" onclick="removeFile()">✕</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Colonnes à extraire</div>
+    <div class="columns-grid">
+      <label class="col-toggle checked" id="toggle-ean">
+        <input type="checkbox" checked onchange="toggleCol(this,'ean')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">EAN</div><div class="col-desc">Code-barre 13 chiffres</div></div>
+      </label>
+      <label class="col-toggle" id="toggle-cip">
+        <input type="checkbox" onchange="toggleCol(this,'cip')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">CIP</div><div class="col-desc">Code pharmacie 7/13 ch.</div></div>
+      </label>
+      <label class="col-toggle checked" id="toggle-libelle">
+        <input type="checkbox" checked onchange="toggleCol(this,'libelle')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">Libellé</div><div class="col-desc">Désignation produit</div></div>
+      </label>
+      <label class="col-toggle checked" id="toggle-colisage">
+        <input type="checkbox" checked onchange="toggleCol(this,'colisage')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">Colisage</div><div class="col-desc">Unité de commande</div></div>
+      </label>
+      <label class="col-toggle checked" id="toggle-prix_achat">
+        <input type="checkbox" checked onchange="toggleCol(this,'prix_achat')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">Prix achat HT</div><div class="col-desc">Histo tarif HT</div></div>
+      </label>
+      <label class="col-toggle checked" id="toggle-ppc">
+        <input type="checkbox" checked onchange="toggleCol(this,'ppc')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">PPC</div><div class="col-desc">Prix public conseillé</div></div>
+      </label>
+      <label class="col-toggle checked" id="toggle-tva">
+        <input type="checkbox" checked onchange="toggleCol(this,'tva')">
+        <div class="check-box">✓</div>
+        <div><div class="col-label">TVA</div><div class="col-desc">Taux TVA %</div></div>
+      </label>
+    </div>
+    <div class="cip-note">⚠ CIP : cocher uniquement si le catalogue contient des codes CIP (2ème passage dédié, +1 min)</div>
+  </div>
+
+  <button class="btn-extract" id="btnExtract" onclick="startExtraction()" disabled>⚡ Extraire les données</button>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-header">
+      <div class="progress-label" id="progressLabel">Initialisation...</div>
+      <div class="progress-pct" id="progressPct">0%</div>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-detail" id="progressDetail"></div>
+    <div class="pages-grid" id="pagesGrid"></div>
+  </div>
+
+  <div class="alert error" id="alertError"></div>
+  <div class="alert success" id="alertSuccess"></div>
+  <div class="alert warning" id="alertWarning"></div>
+
+  <div class="results-panel" id="resultsPanel">
+    <div class="stats-row" id="statsRow"></div>
+    <div class="results-header">
+      <div><div class="results-title">Résultats</div><div class="results-meta" id="resultsMeta"></div></div>
+      <button class="btn-download" onclick="downloadExcel()">⬇ Télécharger Excel</button>
+    </div>
+    <div class="filter-bar">
+      <span style="font-size:12px;color:var(--muted);font-weight:600">Afficher :</span>
+      <button class="filter-btn active" onclick="setFilter('all',this)">Tous</button>
+      <button class="filter-btn" onclick="setFilter('complete',this)">✅ Complets</button>
+      <button class="filter-btn" onclick="setFilter('incomplete',this)">⚠ Prix manquants</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let currentFile=null, extractedData=[], currentFilter='all', apiKeyVisible=false;
+let activeColumns={ean:true,cip:false,libelle:true,colisage:true,prix_achat:true,ppc:true,tva:true};
+
+const COL_CONFIG={
+  ean:       {label:'EAN',          cls:'ean-cell'},
+  cip:       {label:'CIP',          cls:'cip-cell'},
+  libelle:   {label:'Libellé',      cls:'label-cell'},
+  colisage:  {label:'Colisage',     cls:'qty-cell'},
+  prix_achat:{label:'Prix achat HT',cls:'price-cell'},
+  ppc:       {label:'PPC',          cls:'price-cell'},
+  tva:       {label:'TVA %',        cls:'tva-cell'},
+};
+
+// ── API KEY ──────────────────────────────────────────────
+function updateApiStatus(){
+  const key=document.getElementById('apiKey').value.trim();
+  const ok=key.startsWith('sk-ant-')&&key.length>20;
+  const s=document.getElementById('apiStatus');
+  s.className='api-status '+(ok?'ok':'missing');
+  s.innerHTML='<div class="dot"></div> '+(ok?'Clé valide ✓':'Clé non renseignée');
+  refreshBtn();
+}
+function toggleApiVisibility(){apiKeyVisible=!apiKeyVisible;document.getElementById('apiKey').type=apiKeyVisible?'text':'password';}
+function refreshBtn(){
+  const key=document.getElementById('apiKey').value.trim();
+  document.getElementById('btnExtract').disabled=!(key.startsWith('sk-ant-')&&key.length>20&&currentFile);
+}
+
+// ── FILE ─────────────────────────────────────────────────
+const dropZone=document.getElementById('dropZone');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('active');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('active'));
+dropZone.addEventListener('drop',e=>{
+  e.preventDefault();dropZone.classList.remove('active');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.type==='application/pdf')setFile(f);else showAlert('error','Veuillez déposer un PDF.');
+});
+document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files[0])setFile(e.target.files[0]);});
+function setFile(f){
+  currentFile=f;
+  document.getElementById('fileName').textContent=f.name;
+  document.getElementById('fileSize').textContent=(f.size/1024).toFixed(0)+' KB';
+  document.getElementById('fileInfo').style.display='flex';
+  hideAlerts();refreshBtn();
+}
+function removeFile(){
+  currentFile=null;document.getElementById('fileInput').value='';
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('resultsPanel').style.display='none';refreshBtn();
+}
+function toggleCol(cb,key){
+  activeColumns[key]=cb.checked;
+  document.getElementById('toggle-'+key).classList.toggle('checked',cb.checked);
+}
+
+// ── ALERTS ───────────────────────────────────────────────
+function showAlert(type,msg){
+  hideAlerts();
+  const ids={error:'alertError',success:'alertSuccess',warning:'alertWarning'};
+  const icons={error:'⚠ ',success:'✓ ',warning:'⚡ '};
+  const el=document.getElementById(ids[type]);
+  el.textContent=icons[type]+msg;el.style.display='block';
+}
+function hideAlerts(){['alertError','alertSuccess','alertWarning'].forEach(id=>document.getElementById(id).style.display='none');}
+
+// ── PROGRESS ─────────────────────────────────────────────
+function setProgress(pct,label,detail){
+  document.getElementById('progressWrap').style.display='block';
+  document.getElementById('progressFill').style.width=pct+'%';
+  document.getElementById('progressPct').textContent=Math.round(pct)+'%';
+  if(label)document.getElementById('progressLabel').textContent=label;
+  if(detail!==undefined)document.getElementById('progressDetail').textContent=detail;
+}
+function hideProgress(){document.getElementById('progressWrap').style.display='none';}
+function setPageStatus(n,s){const c=document.getElementById('page-chip-'+n);if(c)c.className='page-chip '+s;}
+
+// ── PDF TEXT EXTRACTION ───────────────────────────────────
+async function extractPagesText(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const pages=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    pages.push({num:i,text:content.items.map(item=>item.str).join(' ')});
+  }
+  return pages;
+}
+function pageHasProducts(text){return /\d{5}\s+\d{7}\s+\d/.test(text);}
+
+// ── MAIN CLAUDE CALL (prices only, no CIP) ───────────────
+async function callClaudeMain(pageText,pageNum,apiKey,colsList){
+  const prompt=`Tu es un extracteur expert de tarifs pharmaceutiques Arkopharma.
+Voici le texte brut de la PAGE ${pageNum} d'un catalogue.
+
+TEXTE BRUT:
+${pageText}
+
+MISSION: Extraire TOUS les produits ayant un code EAN (13 chiffres).
+COLONNES: ${colsList}
+
+STRUCTURE DU TABLEAU — 3 colonnes de prix dans cet ordre:
+  1. HISTO ACHAT = prix_achat (1er nombre décimal de la ligne)
+  2. PRIX TARIF HT = 2ème nombre décimal (ignorer)
+  3. PPC = ppc (3ème nombre décimal de la ligne)
+  4. TVA = dernier pourcentage (5,5% ou 20% ou 10%)
+
+RÈGLES CRITIQUES:
+- prix_achat = 1er nombre décimal après le libellé
+- ppc = 3ème nombre décimal (pas le 2ème !)
+- Exemple: "35788 3550295 4  FORCAPIL Anti-chute  37,30 € 33,00 € 33,00 € 5,5%"
+  → prix_achat="37.30", ppc="33.00", tva="5.5"
+- Exemple Arkogélules: "35788 3550317 3  ARKOGÉLULES Artichaut Bio  8,35 € 8,80 € 8,80 € 5,5%"
+  → prix_achat="8.35", ppc="8.80", tva="5.5"
+- Convertir virgules en points: "37,30" → "37.30"
+- Ne JAMAIS laisser prix_achat ou ppc vide si des nombres sont présents
+- ean: coller les chiffres sans espaces (ex: "35788 3550295 4" → "3578835502954")
+- colisage: TOUJOURS "" pour Arkopharma — ne jamais extraire du libellé
+
+EXCLUSIONS STRICTES:
+- Lignes "boîte vendeuse" ou "boite vendeuse" → exclure
+- Lignes "display" → exclure
+- Lignes "PLV" → exclure
+- En-têtes, planogrammes, notes légales → exclure
+
+Répondre UNIQUEMENT en JSON valide:
+{"produits":[{"ean":"3578835502954","libelle":"FORCAPIL Anti-chute 2 mois + 1 mois OFFERT","colisage":"","prix_achat":"37.30","ppc":"33.00","tva":"5.5"}]}
+Si aucun produit: {"produits":[]}`;
+
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok){const e=await resp.json();if(resp.status===401)throw new Error('Clé API invalide.');throw new Error(e.error?.message||'Erreur API '+resp.status);}
+  const data=await resp.json();
+  return parseJSON(data.content?.map(c=>c.text||'').join('')||'');
+}
+
+// ── CIP DEDICATED CALL ───────────────────────────────────
+async function callClaudeCIP(pageText,pageNum,apiKey){
+  const prompt=`Analyse ce texte extrait d'un catalogue pharmaceutique (page ${pageNum}).
+Cherche les codes CIP présents sur les mêmes lignes que les codes EAN.
+
+Un EAN ressemble à: "35788 3550295 4" (format 5+7+1 chiffres = 13 chiffres collés)
+Un CIP ressemble à: un code à 7 chiffres OU 13 chiffres commençant par "34" différent de l'EAN
+
+TEXTE:
+${pageText}
+
+Si un CIP apparaît sur la même ligne qu'un EAN, associe-les.
+Réponds UNIQUEMENT en JSON: {"cips":[{"ean":"3578835502954","cip":"3400912345678"}]}
+Si aucun CIP trouvé: {"cips":[]}`;
+
+  const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+  });
+  if(!resp.ok)return {cips:[]};
+  const data=await resp.json();
+  return parseJSON(data.content?.map(c=>c.text||'').join('')||'');
+}
+
+function parseJSON(str){
+  const clean=str.replace(/```json|```/g,'').trim();
+  try{return JSON.parse(clean);}
+  catch{const m=clean.match(/\{[\s\S]*\}/);if(!m)return{produits:[],cips:[]};try{return JSON.parse(m[0]);}catch{return{produits:[],cips:[]};}}
+}
+
+// ── SMART DEDUP: keep entry with most fields filled ──────
+function smartDeduplicate(items){
+  const map=new Map();
+  for(const item of items){
+    if(!item.ean)continue;
+    const existing=map.get(item.ean);
+    if(!existing){map.set(item.ean,{...item});continue;}
+    // Merge: fill any missing fields from new entry
+    const merged={...existing};
+    for(const key of Object.keys(item)){
+      if((!merged[key]||String(merged[key]).trim()==='')&&item[key]&&String(item[key]).trim()!==''){
+        merged[key]=item[key];
+      }
+    }
+    map.set(item.ean,merged);
+  }
+  return [...map.values()];
+}
+
+// ── MAIN EXTRACTION ───────────────────────────────────────
+async function startExtraction(){
+  if(!currentFile)return;
+  const apiKey=document.getElementById('apiKey').value.trim();
+  if(!apiKey){showAlert('error','Clé API requise.');return;}
+
+  hideAlerts();
+  document.getElementById('resultsPanel').style.display='none';
+  document.getElementById('btnExtract').disabled=true;
+
+  // Build colsList excluding cip (handled separately)
+  const colsList=Object.keys(activeColumns).filter(k=>activeColumns[k]&&k!=='cip').join(', ');
+
+  try{
+    setProgress(5,'Lecture du PDF...','Extraction du texte page par page...');
+    const pages=await extractPagesText(currentFile);
+
+    // Build UI chips
+    const grid=document.getElementById('pagesGrid');grid.innerHTML='';
+    pages.forEach(p=>{
+      const chip=document.createElement('div');
+      chip.id='page-chip-'+p.num;chip.className='page-chip pending';chip.textContent='P'+p.num;
+      grid.appendChild(chip);
+    });
+
+    const productPages=pages.filter(p=>pageHasProducts(p.text));
+    pages.filter(p=>!pageHasProducts(p.text)).forEach(p=>setPageStatus(p.num,'skip'));
+    setProgress(8,`${productPages.length} pages avec produits`,`${pages.length-productPages.length} pages ignorées`);
+
+    // ── PASS 1: extract products + prices ────────────────
+    const allProducts=[];
+    let done=0;
+    for(const page of productPages){
+      setPageStatus(page.num,'processing');
+      const pct=8+(done/productPages.length)*80;
+      setProgress(pct,`Page ${page.num} / ${pages.length}`,`${allProducts.length} produits trouvés...`);
+      try{
+        if(done>0)await sleep(250);
+        const result=await callClaudeMain(page.text,page.num,apiKey,colsList);
+        const prods=result.produits||[];
+        allProducts.push(...prods);
+        setPageStatus(page.num,'done');
+        document.getElementById('progressDetail').textContent=`Page ${page.num} : +${prods.length} · Total : ${allProducts.length}`;
+      }catch(err){
+        setPageStatus(page.num,'skip');
+        console.warn(`Page ${page.num}:`,err.message);
+        // Re-throw ALL API errors so they surface to user
+        if(err.message.includes('API')||err.message.includes('invalide')||err.message.includes('Erreur'))throw err;
+      }
+      done++;
+    }
+
+    if(allProducts.length===0){
+      throw new Error('Aucun produit extrait. Vérifiez votre clé API dans la console (F12) et que le PDF contient bien des codes EAN.');
+    }
+    setProgress(90,'Fusion intelligente...','Dédoublonnage...');
+    const raw=smartDeduplicate(allProducts);
+
+    // Post-filters
+    const excludePattern=/bo[iî]te\s+vendeuse|display|\bPLV\b/i;
+    let filtered=raw.filter(p=>{
+      if(excludePattern.test(p.libelle||''))return false;
+      const hasData=(p.prix_achat&&String(p.prix_achat).trim())||(p.ppc&&String(p.ppc).trim())||(p.tva&&String(p.tva).trim());
+      return!!hasData;
+    });
+
+    // ── PASS 2 (optional): extract CIP ───────────────────
+    if(activeColumns.cip){
+      setProgress(92,'Extraction CIP...','Recherche des codes CIP sur chaque page...');
+      const cipMap={};
+      let cipDone=0;
+      for(const page of productPages){
+        const pct=92+(cipDone/productPages.length)*6;
+        setProgress(pct,`CIP page ${page.num} / ${pages.length}`,'');
+        try{
+          if(cipDone>0)await sleep(200);
+          const result=await callClaudeCIP(page.text,page.num,apiKey);
+          for(const item of(result.cips||[])){
+            if(item.ean&&item.cip)cipMap[item.ean]=item.cip;
+          }
+        }catch(e){console.warn('CIP page',page.num,e.message);}
+        cipDone++;
+      }
+      filtered=filtered.map(p=>({...p,cip:cipMap[p.ean]||''}));
+    }
+
+    extractedData=filtered;
+    setProgress(100,'Terminé !','');
+    setTimeout(()=>{hideProgress();renderResults();document.getElementById('btnExtract').disabled=false;},500);
+
+  }catch(err){
+    hideProgress();showAlert('error','Erreur : '+err.message);
+    document.getElementById('btnExtract').disabled=false;
+  }
+}
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ── FILTER ───────────────────────────────────────────────
+function setFilter(filter,btn){
+  currentFilter=filter;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');renderTable();
+}
+function isIncomplete(row){
+  return!row.prix_achat||!row.ppc||String(row.prix_achat).trim()===''||String(row.ppc).trim()==='';
+}
+
+// ── RENDER ───────────────────────────────────────────────
+function renderResults(){
+  const activeCols=Object.keys(activeColumns).filter(k=>activeColumns[k]);
+  document.getElementById('tableHead').innerHTML='<tr>'+activeCols.map(k=>`<th>${COL_CONFIG[k].label}</th>`).join('')+'</tr>';
+  const total=extractedData.length;
+  const incomplete=extractedData.filter(isIncomplete).length;
+  const complete=total-incomplete;
+  document.getElementById('statsRow').innerHTML=`
+    <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">Produits total</div></div>
+    <div class="stat-card"><div class="stat-num green">${complete}</div><div class="stat-label">Complets ✅</div></div>
+    <div class="stat-card"><div class="stat-num orange">${incomplete}</div><div class="stat-label">Prix manquants ⚠</div></div>`;
+  document.getElementById('resultsMeta').textContent=`${total} produit(s) unique(s) · ${activeCols.length} colonne(s)`;
+  document.getElementById('resultsPanel').style.display='block';
+  if(incomplete>0)showAlert('warning',`${incomplete} produit(s) avec prix manquants (surlignés en jaune).`);
+  else showAlert('success',`${total} produits extraits, tous complets !`);
+  renderTable();
+}
+
+function renderTable(){
+  const activeCols=Object.keys(activeColumns).filter(k=>activeColumns[k]);
+  let data=extractedData;
+  if(currentFilter==='complete')data=data.filter(r=>!isIncomplete(r));
+  if(currentFilter==='incomplete')data=data.filter(r=>isIncomplete(r));
+  if(!data.length){
+    document.getElementById('tableBody').innerHTML=`<tr><td colspan="${activeCols.length}" class="empty-state">Aucun produit dans cette vue</td></tr>`;
+    return;
+  }
+  document.getElementById('tableBody').innerHTML=data.map(row=>{
+    const inc=isIncomplete(row);
+    return'<tr'+(inc?' class="incomplete"':'')+'>'+
+      activeCols.map(k=>{
+        let val=row[k]||'';let display=val;
+        const missing=!val||String(val).trim()==='';
+        if((k==='prix_achat'||k==='ppc')&&val)display=parseFloat(val).toFixed(2)+' €';
+        if(k==='tva'&&val)display=val+' %';
+        return`<td class="${COL_CONFIG[k].cls}">${missing?'<span class="null-cell">—</span>':display}</td>`;
+      }).join('')+'</tr>';
+  }).join('');
+}
+
+// ── EXCEL DOWNLOAD ────────────────────────────────────────
+function downloadExcel(){
+  if(!extractedData.length)return;
+  const activeCols=Object.keys(activeColumns).filter(k=>activeColumns[k]);
+  const headers=activeCols.map(k=>COL_CONFIG[k].label);
+  const rows=extractedData.map(row=>activeCols.map(k=>{
+    let val=row[k]||'';
+    if((k==='prix_achat'||k==='ppc')&&val)return parseFloat(val)||val;
+    if(k==='tva'&&val)return parseFloat(val)||val;
+    return val;
+  }));
+  const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+  ws['!cols']=activeCols.map(k=>({wch:k==='libelle'?55:k==='ean'||k==='cip'?16:14}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Tarif');
+  XLSX.writeFile(wb,(currentFile?.name?.replace('.pdf','')||'extraction')+'_extrait.xlsx');
+}
+</script>
+</body>
+</html>
